@@ -83,6 +83,6 @@ func (s *GcsAdapter) writeToDb(data []byte) {
 	}
 }
 
-func (s *GcsAdapter) GetSubscriptions(id string) []domain.Subscription {
+func (s *GcsAdapter) GetSubscriptions() []domain.Subscription {
 	return s.readFromDb()
 }
