@@ -1,7 +1,7 @@
 package telegram
 
 import (
-	domain "github.com/baor/ah-helper-bot/ahhelperbot"
+	"github.com/baor/ah-helper-bot/domain"
 )
 
 type Messenger interface {

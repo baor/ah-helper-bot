@@ -1,7 +1,7 @@
 package storage
 
 import (
-	domain "github.com/baor/ah-helper-bot/ahhelperbot"
+	"github.com/baor/ah-helper-bot/domain"
 )
 
 // DataStorer to store chats and postcodes

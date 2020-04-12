@@ -8,7 +8,7 @@ import (
 
 	gcs "cloud.google.com/go/storage"
 
-	domain "github.com/baor/ah-helper-bot/ahhelperbot"
+	"github.com/baor/ah-helper-bot/domain"
 )
 
 type GcsAdapter struct {

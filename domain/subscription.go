@@ -1,4 +1,4 @@
-package ahhelperbot
+package domain
 
 type Subscription struct {
 	ChatID   int64

@@ -94,7 +94,7 @@ func (b *Bot) requestResponse(u botApi.Update) {
 		msg = "Please enter your postcode in format \"add 1111AA\""
 	} else {
 		postcode := match[1]
-		msg = fmt.Sprintf("ChatID: %s, Postcode: %s", u.Message.Chat.ID, postcode)
+		msg = fmt.Sprintf("ChatID: %d, Postcode: %s", u.Message.Chat.ID, postcode)
 	}
 
 	botMsg := botApi.NewMessage(u.Message.Chat.ID, msg)
