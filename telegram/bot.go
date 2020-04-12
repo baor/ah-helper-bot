@@ -1,11 +1,15 @@
 package telegram
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"regexp"
 	"time"
 
+	"github.com/baor/ah-helper-bot/domain"
 	botApi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
@@ -20,7 +24,7 @@ type Bot struct {
 }
 
 // NewBot returns an instance of Bot which implements Messenger interface
-func NewBot(token string, selfHost string) Messenger {
+func NewBot(token string) Messenger {
 	var err error
 	b := Bot{}
 	b.botAPI, err = botApi.NewBotAPI(token)
@@ -31,7 +35,6 @@ func NewBot(token string, selfHost string) Messenger {
 	b.botAPI.Debug = false
 	log.Printf("Telegram bot authorized on account %s", b.botAPI.Self.UserName)
 
-	b.setWebHook(selfHost)
 	go b.messageSenderLoop()
 
 	return &b
@@ -48,16 +51,23 @@ func (b *Bot) GetSubscriptionEvents() <-chan SubscriptionEvent {
 	return nil
 }
 
-const webhookPath = "ah-helper-webhook"
+func (b *Bot) UpdatesListener(w http.ResponseWriter, r *http.Request) *domain.Subscription {
+	bytes, _ := ioutil.ReadAll(r.Body)
 
-func (b *Bot) setWebHook(selfHost string) {
-	_, err := b.botAPI.SetWebhook(botApi.NewWebhook(fmt.Sprintf("%s/%s", selfHost, webhookPath)))
-	if err != nil {
-		log.Fatal(err)
-	}
+	var update botApi.Update
+	json.Unmarshal(bytes, &update)
 
-	b.updates = b.botAPI.ListenForWebhook("/" + webhookPath)
+	return b.parseSubscription(update)
 }
+
+// const webhookPath = "ah-helper-webhook"
+
+// func (b *Bot) SetWebHook(selfHost string) {
+// 	_, err := b.botAPI.SetWebhook(botApi.NewWebhook(fmt.Sprintf("%s/%s", selfHost, webhookPath)))
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// }
 
 func (b *Bot) messageSenderLoop() {
 	for {
@@ -74,7 +84,7 @@ func (b *Bot) messageReaderLoop() {
 	for {
 		select {
 		case msg := <-b.updates:
-			b.requestResponse(msg)
+			b.parseSubscription(msg)
 		default:
 			time.Sleep(1 * time.Second)
 		}
@@ -87,22 +97,30 @@ func (b *Bot) messageReaderLoop() {
 	// }
 }
 
-func (b *Bot) requestResponse(u botApi.Update) {
+func (b *Bot) parseSubscription(u botApi.Update) *domain.Subscription {
 	re := regexp.MustCompile(`add (\d{4}\w{2})`)
 	match := re.FindStringSubmatch(u.Message.Text)
 
-	msg := ""
 	if match == nil {
-		msg = "Please enter your postcode in format \"add 1111AA\""
-	} else {
-		postcode := match[1]
-		msg = fmt.Sprintf("ChatID: %d, Postcode: %s", u.Message.Chat.ID, postcode)
+		msg := "Please enter your postcode in format \"add 1111AA\""
+		botMsg := botApi.NewMessage(u.Message.Chat.ID, msg)
+		_, err := b.botAPI.Send(botMsg)
+		if err != nil {
+			log.Panic(err)
+		}
+		return nil
 	}
 
+	postcode := match[1]
+	msg := fmt.Sprintf("ChatID: %d, Postcode: %s", u.Message.Chat.ID, postcode)
 	botMsg := botApi.NewMessage(u.Message.Chat.ID, msg)
 	_, err := b.botAPI.Send(botMsg)
 	if err != nil {
 		log.Panic(err)
+	}
+	return &domain.Subscription{
+		ChatID:   u.Message.Chat.ID,
+		Postcode: postcode,
 	}
 }
 
