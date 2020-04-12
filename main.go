@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +15,22 @@ import (
 // HandlerStatus handler returns applications status
 func status(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "bot status is OK")
+}
+
+// Entrypoint for all requests
+func Entrypoint(w http.ResponseWriter, r *http.Request) {
+	var d struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
+		fmt.Fprint(w, "Hello World!")
+		return
+	}
+	if d.Message == "" {
+		fmt.Fprint(w, "Hello World!")
+		return
+	}
+	fmt.Fprint(w, html.EscapeString(d.Message))
 }
 
 func main() {

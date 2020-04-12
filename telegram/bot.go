@@ -14,13 +14,13 @@ type message struct {
 	chatID int64
 }
 type Bot struct {
-	botAPI             *botApi.BotAPI
-	subscriptionEvents chan SubscriptionEvent
-	messagesToSend     chan message
+	botAPI         *botApi.BotAPI
+	updates        botApi.UpdatesChannel
+	messagesToSend chan message
 }
 
 // NewBot returns an instance of Bot which implements Messenger interface
-func NewBot(token string) Messenger {
+func NewBot(token string, selfHost string) Messenger {
 	var err error
 	b := Bot{}
 	b.botAPI, err = botApi.NewBotAPI(token)
@@ -31,6 +31,7 @@ func NewBot(token string) Messenger {
 	b.botAPI.Debug = false
 	log.Printf("Telegram bot authorized on account %s", b.botAPI.Self.UserName)
 
+	b.setWebHook(selfHost)
 	go b.messageSenderLoop()
 
 	return &b
@@ -41,6 +42,21 @@ func (b *Bot) NewMessageToChat(chatID int64, text string) {
 		chatID: chatID,
 		text:   text,
 	}
+}
+
+func (b *Bot) GetSubscriptionEvents() <-chan SubscriptionEvent {
+	return nil
+}
+
+const webhookPath = "ah-helper-webhook"
+
+func (b *Bot) setWebHook(selfHost string) {
+	_, err := b.botAPI.SetWebhook(botApi.NewWebhook(fmt.Sprintf("%s/%s", selfHost, webhookPath)))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	b.updates = b.botAPI.ListenForWebhook("/" + webhookPath)
 }
 
 func (b *Bot) messageSenderLoop() {
@@ -55,23 +71,9 @@ func (b *Bot) messageSenderLoop() {
 }
 
 func (b *Bot) messageReaderLoop() {
-
-	u := botApi.NewUpdate(0)
-	u.Timeout = 60
-
-	updates, err := b.botAPI.GetUpdatesChan(u)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	// Optional: wait for updates and clear them if you don't want to handle
-	// a large backlog of old messages
-	time.Sleep(time.Millisecond * 500)
-	updates.Clear()
-
 	for {
 		select {
-		case msg := <-updates:
+		case msg := <-b.updates:
 			b.requestResponse(msg)
 		default:
 			time.Sleep(1 * time.Second)
@@ -116,8 +118,4 @@ func (b *Bot) sendMessage(msg message) {
 	if err != nil {
 		log.Panic(err)
 	}
-}
-
-func (b *Bot) GetSubscriptionEvents() <-chan SubscriptionEvent {
-	return b.subscriptionEvents
 }
