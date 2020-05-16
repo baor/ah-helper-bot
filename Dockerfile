@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.14 AS builder
+FROM golang:1.13 AS builder
 
 # Create the user and group files that will be used in the running container to
 # run the process as an unprivileged user.
@@ -19,7 +19,7 @@ RUN go mod download
 # Set the environment variables for the go command:
 # * CGO_ENABLED=0 to build a statically-linked executable
 # Build the executable to `/telegobot_bin`. Mark the build as statically linked.
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o /telegobot_bin .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o /bot_bin .
 
 
 FROM scratch AS final
@@ -33,7 +33,7 @@ COPY --from=builder /user/group /user/passwd /etc/
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Import the compiled executable from the second stage.
-COPY --from=builder /telegobot_bin /telegobot_bin
+COPY --from=builder /bot_bin /bot_bin
 
 EXPOSE 8080
 
