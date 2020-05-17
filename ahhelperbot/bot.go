@@ -55,7 +55,7 @@ func (b *Bot) CheckDeliveries() {
 		deliverySchedule := b.deliveryProvider.Get(subscription.Postcode)
 		b.send(domain.Message{
 			ChatID: subscription.ChatID,
-			Text:   deliverySchedule})
+			Text:   deliverySchedule.String()})
 	}
 }
 
@@ -73,6 +73,7 @@ func (b *Bot) sendMessageHelp(chatID int64) {
 	b.messenger.Send(domain.Message{ChatID: chatID, Text: msg})
 }
 
+// DefaultMessageProcessor is a processor for messages to bot
 func (b *Bot) DefaultMessageProcessor(msg domain.Message) {
 	match := b.reAddme.FindStringSubmatch(msg.Text)
 	if match != nil {
@@ -98,58 +99,6 @@ func (b *Bot) DefaultMessageProcessor(msg domain.Message) {
 
 	b.sendMessageHelp(msg.ChatID)
 }
-
-// func parseResponseToDeliveries(responseBody string) string {
-//     var lines = responseBody["_embedded"]["lanes"];
-//     var deliveries = {};
-//     for (line of lines) {
-//         var items = line["_embedded"]["items"];
-//         for (item of items) {
-//             if (item["type"] == "DeliveryTimeSelector") {
-//                 for (deliveryTimeSlot of item["_embedded"]["deliveryTimeSlots"]) {
-//                     if (deliveryTimeSlot["dl"] in deliveries) {
-//                         continue;
-//                     }
-//                     if (deliveryTimeSlot["state"] == "full") {
-//                         continue;
-//                     }
-
-//                     var href = deliveryTimeSlot["navItem"]["link"]["href"];
-//                     var date = href.match(/\/(\d{4}-\d{2}-\d{2})\//)[0];
-
-//                     deliveries[deliveryTimeSlot["dl"]] = {
-//                         date: date,
-//                         from: deliveryTimeSlot["from"],
-//                         to: deliveryTimeSlot["to"],
-//                     };
-//                 }
-//                 continue;
-//             }
-//             if (item["type"] == "DeliveryDateSelector") {
-//                 var deliveryAllDates = item["_embedded"]["deliveryDates"];
-//                 for (deliveryDate of deliveryAllDates) {
-//                     for (deliveryTimeSlot of deliveryDate["deliveryTimeSlots"]) {
-//                         if (deliveryTimeSlot["state"] == "full") {
-//                             continue;
-//                         }
-//                         if (deliveryTimeSlot["dl"] in deliveries) {
-//                             deliveries[deliveryTimeSlot["dl"]].date = deliveryDate["date"];
-//                         } else {
-//                             deliveries[deliveryTimeSlot["dl"]] = {
-//                                 date: deliveryDate["date"],
-//                                 from: deliveryTimeSlot["from"],
-//                                 to: deliveryTimeSlot["to"],
-//                             };
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     console.log("deliveries == " + JSON.stringify(deliveries));
-//     return deliveries;
-// }
 
 // func deliveriesToMessage(deliveries) {
 //     var dates = {};

@@ -1,6 +1,7 @@
 package ahhelperbot
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/baor/ah-helper-bot/domain"
@@ -27,11 +28,17 @@ func (b *fakeMessenger) Send(m domain.Message) {
 }
 
 type fakeDeliveryProvider struct {
-	response string
+	date string
 }
 
-func (p *fakeDeliveryProvider) Get(postcode string) string {
-	return postcode + p.response
+func (p *fakeDeliveryProvider) Get(postcode string) DeliverySchedule {
+	resp := DeliverySchedule{}
+	resp[p.date] = []DeliveryTimeSlotBase{
+		{
+			From: postcode,
+		},
+	}
+	return resp
 }
 
 type fakeDataStorer struct {
@@ -122,17 +129,18 @@ func TestBotDelivery_Get(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
 	eventsCh := make(chan domain.Event, 1)
 
+	postcode := "1234AA"
 	storage := fakeDataStorer{
 		subscriptions: []domain.Subscription{
-			domain.Subscription{
+			{
 				ChatID:   1,
-				Postcode: "1234AA",
+				Postcode: postcode,
 			},
 		},
 	}
 
 	provider := fakeDeliveryProvider{
-		response: "-OK",
+		date: "01-01-1970",
 	}
 	bot := NewBot(eventsCh, &storage, &provider)
 	bot.SetMessenger(fakeMessenger)
@@ -141,5 +149,5 @@ func TestBotDelivery_Get(t *testing.T) {
 	bot.CheckDeliveries()
 
 	sentMsg := fakeMessenger.sentMessages[1]
-	assert.Contains(t, sentMsg, "1234AA-OK")
+	assert.Contains(t, sentMsg, fmt.Sprintf("%s:%s-", provider.date, postcode))
 }
