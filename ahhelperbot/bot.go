@@ -12,7 +12,6 @@ import (
 // Bot is a telegram bot which returns events and sends messages
 type Bot struct {
 	messenger telegram.Messenger
-	eventsCh  chan<- domain.Event
 
 	reAddme    *regexp.Regexp
 	reRemoveme *regexp.Regexp
@@ -30,14 +29,11 @@ type pubSubMessage struct {
 
 // NewBot returns an instance of Bot which implements Messenger interface
 // tlgr - is an low-level abstraction for telegram API
-func NewBot(eventsCh chan<- domain.Event, storage storage.DataStorer, deliveryProvider DeliveryProvider) *Bot {
+func NewBot(storage storage.DataStorer, deliveryProvider DeliveryProvider) *Bot {
 	b := Bot{}
 
 	b.reAddme = regexp.MustCompile(`addme (\d{4}\w{2})`)
 	b.reRemoveme = regexp.MustCompile(`removeme (\d{4}\w{2})`)
-
-	b.eventsCh = eventsCh
-
 	b.storage = storage
 
 	b.deliveryProvider = deliveryProvider
@@ -78,46 +74,26 @@ func (b *Bot) DefaultMessageProcessor(msg domain.Message) {
 	match := b.reAddme.FindStringSubmatch(msg.Text)
 	if match != nil {
 		postcode := match[1]
-		b.eventsCh <- domain.Event{
-			Type:     domain.EventTypeAdd,
+		sub := domain.Subscription{
 			ChatID:   msg.ChatID,
 			Postcode: postcode,
 		}
+		log.Printf("message processor add subscription: %+v", sub)
+		b.storage.AddSubscription(sub)
 		return
 	}
 
 	match = b.reRemoveme.FindStringSubmatch(msg.Text)
 	if match != nil {
 		postcode := match[1]
-		b.eventsCh <- domain.Event{
-			Type:     domain.EventTypeRemove,
+		sub := domain.Subscription{
 			ChatID:   msg.ChatID,
 			Postcode: postcode,
 		}
+		log.Printf("message processor remove subscription: %+v", sub)
+		b.storage.RemoveSubscription(sub)
 		return
 	}
 
 	b.sendMessageHelp(msg.ChatID)
 }
-
-// func deliveriesToMessage(deliveries) {
-//     var dates = {};
-//     for (var deliveryId in deliveries) {
-//         if (dates[deliveries[deliveryId].date] === undefined) {
-//             dates[deliveries[deliveryId].date] = [];
-//         }
-//         dates[deliveries[deliveryId].date].push(deliveries[deliveryId].from + "-" + deliveries[deliveryId].to)
-//     }
-
-//     if (Object.keys(deliveries).length == 0) {
-//         console.warn("delivery not available");
-//         return "delivery not available";
-//     }
-
-//     var message = "";
-//     for (var oneDate in dates) {
-//         message += oneDate + ": " + dates[oneDate].join(",") + "\n";
-//     }
-
-//     return message;
-// }

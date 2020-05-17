@@ -33,14 +33,23 @@ func NewFirestoreAdapter(projectID string) DataStorer {
 		context: ctx,
 	}
 
-	log.Printf("Firestore clientto projec '%s' is created", projectID)
+	log.Printf("Firestore client to project '%s' is created", projectID)
 	return &adapater
 }
 
 func (a *firestoreAdapter) AddSubscription(sub domain.Subscription) {
-	_, _, err := a.client.Collection(subscriptionCollection).Add(a.context, sub)
+	log.Printf("Add subscription %+v", sub)
+	_, err := a.client.Collection(subscriptionCollection).Doc(string(sub.ChatID)).Set(a.context, sub)
 	if err != nil {
 		log.Fatalf("Error %v on adding subscription: %v+", err, sub)
+	}
+}
+
+func (a *firestoreAdapter) RemoveSubscription(sub domain.Subscription) {
+	log.Printf("Remove subscription %+v", sub)
+	_, err := a.client.Collection(subscriptionCollection).Doc(string(sub.ChatID)).Delete(a.context)
+	if err != nil {
+		log.Fatalf("Error %v on removing subscription: %v+", err, sub)
 	}
 }
 

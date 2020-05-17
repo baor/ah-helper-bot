@@ -7,5 +7,6 @@ import (
 // DataStorer to store chats and postcodes
 type DataStorer interface {
 	AddSubscription(domain.Subscription)
+	RemoveSubscription(domain.Subscription)
 	GetSubscriptions() []domain.Subscription
 }

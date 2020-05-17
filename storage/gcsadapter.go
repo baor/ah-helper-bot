@@ -48,6 +48,10 @@ func (s *GcsAdapter) AddSubscription(sub domain.Subscription) {
 	s.writeToDb(data)
 }
 
+func (s *GcsAdapter) RemoveSubscription(sub domain.Subscription) {
+	panic("Not implemented")
+}
+
 func (s *GcsAdapter) readFromDb() []domain.Subscription {
 	ctx := context.Background()
 

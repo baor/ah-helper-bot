@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/baor/ah-helper-bot/ahhelperbot"
-	"github.com/baor/ah-helper-bot/domain"
 	"github.com/baor/ah-helper-bot/storage"
 	"github.com/baor/ah-helper-bot/telegram"
 )
@@ -34,8 +33,7 @@ func getProjectID() string {
 
 func main() {
 	s := storage.NewFirestoreAdapter(getProjectID())
-	eventsCh := make(chan domain.Event, 1)
-	bot := ahhelperbot.NewBot(eventsCh, s, &ahhelperbot.DefaultDeliveryProvider{})
+	bot := ahhelperbot.NewBot(s, &ahhelperbot.DefaultDeliveryProvider{})
 	telegramMessenger := telegram.NewMessenger(getBotToken(), bot.DefaultMessageProcessor, 5*time.Second)
 	bot.SetMessenger(telegramMessenger)
 

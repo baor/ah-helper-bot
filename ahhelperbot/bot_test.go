@@ -42,21 +42,32 @@ func (p *fakeDeliveryProvider) Get(postcode string) DeliverySchedule {
 }
 
 type fakeDataStorer struct {
-	subscriptions []domain.Subscription
+	subscriptions map[int64]domain.Subscription
 }
 
 func (s *fakeDataStorer) AddSubscription(subscription domain.Subscription) {
-	s.subscriptions = append(s.subscriptions, subscription)
-
+	if s.subscriptions == nil {
+		s.subscriptions = make(map[int64]domain.Subscription)
+	}
+	s.subscriptions[subscription.ChatID] = subscription
 }
+
+func (s *fakeDataStorer) RemoveSubscription(subscription domain.Subscription) {
+	delete(s.subscriptions, subscription.ChatID)
+}
+
 func (s *fakeDataStorer) GetSubscriptions() []domain.Subscription {
-	return s.subscriptions
+	subs := []domain.Subscription{}
+	for _, v := range s.subscriptions {
+		subs = append(subs, v)
+	}
+	return subs
 }
 
 func TestBot_SendMessage(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
-	eventsCh := make(chan domain.Event, 1)
-	bot := NewBot(eventsCh, &fakeDataStorer{}, &fakeDeliveryProvider{})
+	storage := fakeDataStorer{}
+	bot := NewBot(&storage, &fakeDeliveryProvider{})
 	bot.SetMessenger(fakeMessenger)
 
 	// Act
@@ -67,8 +78,8 @@ func TestBot_SendMessage(t *testing.T) {
 
 func TestBotMessageProcessor_ProcessHelp(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
-	eventsCh := make(chan domain.Event, 1)
-	bot := NewBot(eventsCh, &fakeDataStorer{}, &fakeDeliveryProvider{})
+	storage := fakeDataStorer{}
+	bot := NewBot(&storage, &fakeDeliveryProvider{})
 	bot.SetMessenger(fakeMessenger)
 
 	msg := domain.Message{
@@ -84,8 +95,8 @@ func TestBotMessageProcessor_ProcessHelp(t *testing.T) {
 
 func TestBotMessageProcessor_ProcessAdd(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
-	eventsCh := make(chan domain.Event, 1)
-	bot := NewBot(eventsCh, &fakeDataStorer{}, &fakeDeliveryProvider{})
+	storage := fakeDataStorer{}
+	bot := NewBot(&storage, &fakeDeliveryProvider{})
 	bot.SetMessenger(fakeMessenger)
 
 	msg := domain.Message{
@@ -95,18 +106,23 @@ func TestBotMessageProcessor_ProcessAdd(t *testing.T) {
 	// Act
 	bot.DefaultMessageProcessor(msg)
 
-	event := <-eventsCh
-	assert.Equal(t, domain.Event{
-		Type:     domain.EventTypeAdd,
+	assert.Equal(t, domain.Subscription{
 		ChatID:   1,
 		Postcode: "1234AA",
-	}, event)
+	}, storage.subscriptions[1])
 }
 
 func TestBotMessageProcessor_ProcessRemove(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
-	eventsCh := make(chan domain.Event, 1)
-	bot := NewBot(eventsCh, &fakeDataStorer{}, &fakeDeliveryProvider{})
+	storage := fakeDataStorer{
+		subscriptions: map[int64]domain.Subscription{
+			1: domain.Subscription{
+				ChatID:   1,
+				Postcode: "1234AA",
+			},
+		},
+	}
+	bot := NewBot(&storage, &fakeDeliveryProvider{})
 	bot.SetMessenger(fakeMessenger)
 
 	msg := domain.Message{
@@ -117,24 +133,17 @@ func TestBotMessageProcessor_ProcessRemove(t *testing.T) {
 	// Act
 	bot.DefaultMessageProcessor(msg)
 
-	event := <-eventsCh
-	assert.Equal(t, domain.Event{
-		Type:     domain.EventTypeRemove,
-		ChatID:   1,
-		Postcode: "1234AA",
-	}, event)
+	assert.Equal(t, 0, len(storage.subscriptions))
 }
 
 func TestBotDelivery_Get(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
-	eventsCh := make(chan domain.Event, 1)
-
 	postcode := "1234AA"
 	storage := fakeDataStorer{
-		subscriptions: []domain.Subscription{
-			{
+		subscriptions: map[int64]domain.Subscription{
+			1: domain.Subscription{
 				ChatID:   1,
-				Postcode: postcode,
+				Postcode: "1234AA",
 			},
 		},
 	}
@@ -142,7 +151,7 @@ func TestBotDelivery_Get(t *testing.T) {
 	provider := fakeDeliveryProvider{
 		date: "01-01-1970",
 	}
-	bot := NewBot(eventsCh, &storage, &provider)
+	bot := NewBot(&storage, &provider)
 	bot.SetMessenger(fakeMessenger)
 
 	// Act

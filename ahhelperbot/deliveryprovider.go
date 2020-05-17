@@ -22,6 +22,7 @@ type DefaultDeliveryProvider struct{}
 
 // Get returns schedule for AH
 func (p *DefaultDeliveryProvider) Get(postcode string) DeliverySchedule {
+	log.Printf("Request deliveries for postcode %s", postcode)
 
 	c := http.Client{Timeout: 20 * time.Second}
 
@@ -40,7 +41,7 @@ func (p *DefaultDeliveryProvider) Get(postcode string) DeliverySchedule {
 
 	err = json.NewDecoder(resp.Body).Decode(&dr)
 
-	return ConvertResponseToSchedule(dr)
+	return convertResponseToSchedule(dr)
 }
 
 func newDeliveryRequest(postcode string) *http.Request {
@@ -63,6 +64,7 @@ func newDeliveryRequest(postcode string) *http.Request {
 	return req
 }
 
+// DeliveryTimeSlotBase base struct of delivery time slot. Same for time and date schedule
 type DeliveryTimeSlotBase struct {
 	Dl    int    `json:"dl"`
 	From  string `json:"from"`
@@ -128,7 +130,6 @@ type deliveryDate struct {
 }
 
 type item struct {
-	itemType          string
 	deliveryTimeSlots []deliveryTimeSlot
 	deliveryDates     []deliveryDate
 }
@@ -151,8 +152,6 @@ func (i *item) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	i.itemType = itemType
-
 	if itemType == "DeliveryTimeSelector" {
 		emb, ok := objmap["_embedded"]
 		if !ok {
@@ -167,7 +166,6 @@ func (i *item) UnmarshalJSON(data []byte) error {
 			return errors.New("no deliveryTimeSlots")
 		}
 
-		i.itemType = itemType
 		if err := json.Unmarshal(slots, &i.deliveryTimeSlots); err != nil {
 			return err
 		}
@@ -187,7 +185,7 @@ func (i *item) UnmarshalJSON(data []byte) error {
 		if !ok {
 			return errors.New("no deliveryDates")
 		}
-		i.itemType = itemType
+
 		if err := json.Unmarshal(dates, &i.deliveryDates); err != nil {
 			return err
 		}
@@ -262,10 +260,51 @@ func (d *deliveryResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+//DeliverySchedule is used to represent time schedule by date
 type DeliverySchedule map[string][]DeliveryTimeSlotBase
 
-func ConvertResponseToSchedule(dr deliveryResponse) DeliverySchedule {
+//convertResponseToSchedule converts response to delivery schedule
+func convertResponseToSchedule(dr deliveryResponse) DeliverySchedule {
 	ds := DeliverySchedule{}
+	for _, line := range dr.lanes {
+		for _, item := range line.items {
+			for _, dd := range item.deliveryDates {
+				slots := []DeliveryTimeSlotBase{}
+				for _, dts := range dd.DeliveryTimeSlots {
+					if dts.State == "full" {
+						continue
+					}
+					slots = append(slots, DeliveryTimeSlotBase{
+						Dl:   dts.Dl,
+						From: dts.From,
+						To:   dts.To,
+					})
+
+				}
+				if len(slots) > 0 {
+					if ds[dd.Date] == nil {
+						ds[dd.Date] = []DeliveryTimeSlotBase{}
+					}
+					ds[dd.Date] = append(ds[dd.Date], slots...)
+				}
+			}
+			for _, dts := range item.deliveryTimeSlots {
+				if dts.State == "full" {
+					continue
+				}
+
+				if ds[dts.Date] == nil {
+					ds[dts.Date] = []DeliveryTimeSlotBase{}
+				}
+				ds[dts.Date] = append(ds[dts.Date], DeliveryTimeSlotBase{
+					Dl:   dts.Dl,
+					From: dts.From,
+					To:   dts.To,
+				})
+
+			}
+		}
+	}
 	return ds
 }
 
