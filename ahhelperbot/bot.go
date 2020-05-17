@@ -1,6 +1,7 @@
 package ahhelperbot
 
 import (
+	"fmt"
 	"log"
 	"regexp"
 
@@ -32,8 +33,8 @@ type pubSubMessage struct {
 func NewBot(storage storage.DataStorer, deliveryProvider DeliveryProvider) *Bot {
 	b := Bot{}
 
-	b.reAddme = regexp.MustCompile(`addme (\d{4}\w{2})`)
-	b.reRemoveme = regexp.MustCompile(`removeme (\d{4}\w{2})`)
+	b.reAddme = regexp.MustCompile(`\/addme (\d{4}\w{2})`)
+	b.reRemoveme = regexp.MustCompile(`\/unsubscribe`)
 	b.storage = storage
 
 	b.deliveryProvider = deliveryProvider
@@ -48,10 +49,17 @@ func (b *Bot) SetMessenger(messenger telegram.Messenger) {
 // CheckDeliveries checks delivery for subscripions
 func (b *Bot) CheckDeliveries() {
 	for _, subscription := range b.storage.GetSubscriptions() {
+		if len(subscription.Postcode) == 0 {
+			continue
+		}
 		deliverySchedule := b.deliveryProvider.Get(subscription.Postcode)
+		scheduleText := deliverySchedule.String()
+		if len(scheduleText) == 0 {
+			scheduleText = "delivery not available"
+		}
 		b.send(domain.Message{
 			ChatID: subscription.ChatID,
-			Text:   deliverySchedule.String()})
+			Text:   scheduleText})
 	}
 }
 
@@ -65,7 +73,15 @@ func (b *Bot) send(msg domain.Message) {
 }
 
 func (b *Bot) sendMessageHelp(chatID int64) {
-	msg := "Help for the chatbot. Please enter your postcode in format \"addme 1111AA\""
+	msg := `Help for the AH chatbot.
+	+ In order to register or update information, please enter your postcode in format 
+	/addme 1234AB
+
+	+ To remove your registration, enter
+	/unsubscribe
+
+	any other input will show this message
+	`
 	b.messenger.Send(domain.Message{ChatID: chatID, Text: msg})
 }
 
@@ -80,18 +96,23 @@ func (b *Bot) DefaultMessageProcessor(msg domain.Message) {
 		}
 		log.Printf("message processor add subscription: %+v", sub)
 		b.storage.AddSubscription(sub)
+		b.messenger.Send(domain.Message{
+			ChatID: msg.ChatID,
+			Text:   fmt.Sprintf("Subscription for postcode %s was successful", postcode),
+		})
 		return
 	}
 
-	match = b.reRemoveme.FindStringSubmatch(msg.Text)
-	if match != nil {
-		postcode := match[1]
+	if b.reRemoveme.MatchString(msg.Text) {
 		sub := domain.Subscription{
-			ChatID:   msg.ChatID,
-			Postcode: postcode,
+			ChatID: msg.ChatID,
 		}
 		log.Printf("message processor remove subscription: %+v", sub)
 		b.storage.RemoveSubscription(sub)
+		b.messenger.Send(domain.Message{
+			ChatID: msg.ChatID,
+			Text:   fmt.Sprintf("Subscription was removed"),
+		})
 		return
 	}
 

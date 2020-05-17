@@ -22,18 +22,23 @@ type DefaultDeliveryProvider struct{}
 
 // Get returns schedule for AH
 func (p *DefaultDeliveryProvider) Get(postcode string) DeliverySchedule {
-	log.Printf("Request deliveries for postcode %s", postcode)
+	log.Printf("Request deliveries for postcode '%s'", postcode)
+	if len(postcode) == 0 {
+		log.Fatal("Postcode is empty!")
+	}
 
 	c := http.Client{Timeout: 20 * time.Second}
 
 	req := newDeliveryRequest(postcode)
+	dumpReq, _ := httputil.DumpRequest(req, false)
+	log.Printf("Request: %v\n", string(dumpReq))
 	resp, err := c.Do(req)
-	dump, err := httputil.DumpResponse(resp, true)
+	dump, _ := httputil.DumpResponse(resp, true)
+	log.Printf("Response: %v\n", string(dump))
+
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	log.Printf("%v\n", dump)
 
 	defer resp.Body.Close()
 
@@ -47,19 +52,10 @@ func (p *DefaultDeliveryProvider) Get(postcode string) DeliverySchedule {
 func newDeliveryRequest(postcode string) *http.Request {
 	url := "https://www.ah.nl/service/rest/delegate?url=%2Fkies-moment%2Fbezorgen%2F" + postcode
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("authority", "www.ah.nl")
 	req.Header.Add("accept", "application/json")
-	req.Header.Add("x-requested-with", "XMLHttpRequest")
 	req.Header.Add("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Safari/537.36")
-	req.Header.Add("x-order-mode", "false")
 	req.Header.Add("accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Add("sec-fetch-dest", "empty")
-	req.Header.Add("x-requested-with", "XMLHttpRequest")
-	req.Header.Add("x-breakpoint", "medium")
-	req.Header.Add("sec-fetch-site", "same-origin")
-	req.Header.Add("sec-fetch-mode", "cors")
 	req.Header.Add("referer", "https://www.ah.nl/mijnlijst")
-	req.Header.Add("accept-language", "en-US,en;q=0.9,nl-NL;q=0.8,nl;q=0.7,ru-RU;q=0.6,ru;q=0.5")
 
 	return req
 }
@@ -311,9 +307,9 @@ func convertResponseToSchedule(dr deliveryResponse) DeliverySchedule {
 func (ds DeliverySchedule) String() string {
 	var stringBuilder strings.Builder
 	for date, scheds := range ds {
-		stringBuilder.WriteString(fmt.Sprintf("%s:", date))
+		stringBuilder.WriteString(fmt.Sprintf("*%s*: ", date))
 		for _, sched := range scheds {
-			stringBuilder.WriteString(fmt.Sprintf("%s-%s", sched.From, sched.To))
+			stringBuilder.WriteString(fmt.Sprintf("%s-%s ", sched.From, sched.To))
 		}
 		stringBuilder.WriteString("\n")
 	}

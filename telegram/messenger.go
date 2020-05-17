@@ -61,6 +61,7 @@ func NewMessenger(token string, messageProcessor MessageProcessor, delay time.Du
 // It requires the Chattable to send.
 func (a *tlgMessenger) Send(m domain.Message) {
 	botMsg := tlg.NewMessage(m.ChatID, m.Text)
+	botMsg.ParseMode = "Markdown"
 	log.Printf("Send message: %+v", botMsg)
 	_, err := a.botAPI.Send(botMsg)
 	if err != nil {
@@ -72,6 +73,10 @@ func (a *tlgMessenger) updatesListener(delay time.Duration) {
 	for {
 		select {
 		case u := <-a.updatesCh:
+			if u.Message == nil || u.Message.Chat == nil || len(u.Message.Text) == 0 {
+				continue
+			}
+
 			message := domain.Message{
 				ChatID: u.Message.Chat.ID,
 				Text:   u.Message.Text,
