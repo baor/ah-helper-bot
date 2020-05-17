@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.13 AS builder
+FROM golang:1.14 AS builder
 
 # Create the user and group files that will be used in the running container to
 # run the process as an unprivileged user.
