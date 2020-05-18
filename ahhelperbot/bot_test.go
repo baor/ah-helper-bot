@@ -12,12 +12,12 @@ import (
 type fakeMessenger struct {
 	tlgBotAPI    *tlg.BotAPI
 	updatesCh    chan tlg.Update
-	sentMessages map[int64]string
+	sentMessages map[domain.ChatID]string
 }
 
 func newFakeMessenger() *fakeMessenger {
 	b := fakeMessenger{}
-	b.sentMessages = map[int64]string{}
+	b.sentMessages = map[domain.ChatID]string{}
 
 	b.updatesCh = make(chan tlg.Update, 1)
 	return &b
@@ -42,12 +42,12 @@ func (p *fakeDeliveryProvider) Get(postcode string) DeliverySchedule {
 }
 
 type fakeDataStorer struct {
-	subscriptions map[int64]domain.Subscription
+	subscriptions map[domain.ChatID]domain.Subscription
 }
 
 func (s *fakeDataStorer) AddSubscription(subscription domain.Subscription) {
 	if s.subscriptions == nil {
-		s.subscriptions = make(map[int64]domain.Subscription)
+		s.subscriptions = make(map[domain.ChatID]domain.Subscription)
 	}
 	s.subscriptions[subscription.ChatID] = subscription
 }
@@ -62,6 +62,10 @@ func (s *fakeDataStorer) GetSubscriptions() []domain.Subscription {
 		subs = append(subs, v)
 	}
 	return subs
+}
+
+func (s *fakeDataStorer) GetSubscriptionByID(c domain.ChatID) domain.Subscription {
+	return s.subscriptions[c]
 }
 
 func TestBot_SendMessage(t *testing.T) {
@@ -101,7 +105,7 @@ func TestBotMessageProcessor_ProcessAdd(t *testing.T) {
 
 	msg := domain.Message{
 		ChatID: 1,
-		Text:   "addme 1234AA",
+		Text:   "/addme 1234AA",
 	}
 	// Act
 	bot.DefaultMessageProcessor(msg)
@@ -115,7 +119,7 @@ func TestBotMessageProcessor_ProcessAdd(t *testing.T) {
 func TestBotMessageProcessor_ProcessRemove(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
 	storage := fakeDataStorer{
-		subscriptions: map[int64]domain.Subscription{
+		subscriptions: map[domain.ChatID]domain.Subscription{
 			1: domain.Subscription{
 				ChatID:   1,
 				Postcode: "1234AA",
@@ -127,7 +131,7 @@ func TestBotMessageProcessor_ProcessRemove(t *testing.T) {
 
 	msg := domain.Message{
 		ChatID: 1,
-		Text:   "removeme 1234AA",
+		Text:   "/unsubscribe 1234AA",
 	}
 
 	// Act
@@ -136,14 +140,45 @@ func TestBotMessageProcessor_ProcessRemove(t *testing.T) {
 	assert.Equal(t, 0, len(storage.subscriptions))
 }
 
+func TestBotMessageProcessor_ProcessCheck(t *testing.T) {
+	fakeMessenger := newFakeMessenger()
+	postcode := "1234AA"
+	storage := fakeDataStorer{
+		subscriptions: map[domain.ChatID]domain.Subscription{
+			1: domain.Subscription{
+				ChatID:   1,
+				Postcode: postcode,
+			},
+		},
+	}
+
+	provider := fakeDeliveryProvider{
+		date: "01-01-1970",
+	}
+
+	bot := NewBot(&storage, &provider)
+	bot.SetMessenger(fakeMessenger)
+
+	msg := domain.Message{
+		ChatID: 1,
+		Text:   "/check",
+	}
+
+	// Act
+	bot.DefaultMessageProcessor(msg)
+
+	sentMsg := fakeMessenger.sentMessages[1]
+	assert.Contains(t, sentMsg, fmt.Sprintf("*%s*: %s-", provider.date, postcode))
+}
+
 func TestBotDelivery_Get(t *testing.T) {
 	fakeMessenger := newFakeMessenger()
 	postcode := "1234AA"
 	storage := fakeDataStorer{
-		subscriptions: map[int64]domain.Subscription{
+		subscriptions: map[domain.ChatID]domain.Subscription{
 			1: domain.Subscription{
 				ChatID:   1,
-				Postcode: "1234AA",
+				Postcode: postcode,
 			},
 		},
 	}
@@ -158,5 +193,5 @@ func TestBotDelivery_Get(t *testing.T) {
 	bot.CheckDeliveries()
 
 	sentMsg := fakeMessenger.sentMessages[1]
-	assert.Contains(t, sentMsg, fmt.Sprintf("%s:%s-", provider.date, postcode))
+	assert.Contains(t, sentMsg, fmt.Sprintf("*%s*: %s-", provider.date, postcode))
 }

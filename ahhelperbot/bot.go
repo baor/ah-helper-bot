@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 
 	"github.com/baor/ah-helper-bot/domain"
 	"github.com/baor/ah-helper-bot/storage"
@@ -14,8 +15,9 @@ import (
 type Bot struct {
 	messenger telegram.Messenger
 
-	reAddme    *regexp.Regexp
-	reRemoveme *regexp.Regexp
+	reAddme         *regexp.Regexp
+	reRemoveme      *regexp.Regexp
+	reCheckDelivery *regexp.Regexp
 
 	storage storage.DataStorer
 
@@ -34,7 +36,7 @@ func NewBot(storage storage.DataStorer, deliveryProvider DeliveryProvider) *Bot 
 	b := Bot{}
 
 	b.reAddme = regexp.MustCompile(`\/addme (\d{4}\w{2})`)
-	b.reRemoveme = regexp.MustCompile(`\/unsubscribe`)
+
 	b.storage = storage
 
 	b.deliveryProvider = deliveryProvider
@@ -49,18 +51,35 @@ func (b *Bot) SetMessenger(messenger telegram.Messenger) {
 // CheckDeliveries checks delivery for subscripions
 func (b *Bot) CheckDeliveries() {
 	for _, subscription := range b.storage.GetSubscriptions() {
-		if len(subscription.Postcode) == 0 {
-			continue
-		}
-		deliverySchedule := b.deliveryProvider.Get(subscription.Postcode)
-		scheduleText := deliverySchedule.String()
-		if len(scheduleText) == 0 {
-			scheduleText = "delivery not available"
-		}
+		b.checkDelivery(subscription)
+	}
+}
+
+func (b *Bot) checkDeliveryByID(c domain.ChatID) {
+	sub := b.storage.GetSubscriptionByID(c)
+	b.checkDelivery(sub)
+}
+
+func (b *Bot) checkDelivery(subscription domain.Subscription) {
+	if subscription.ChatID == 0 {
+		return
+	}
+
+	if len(subscription.Postcode) == 0 {
 		b.send(domain.Message{
 			ChatID: subscription.ChatID,
-			Text:   scheduleText})
+			Text:   "Postcode was not found. Try to register again with /addme 1234AB"})
+		return
 	}
+
+	deliverySchedule := b.deliveryProvider.Get(subscription.Postcode)
+	scheduleText := deliverySchedule.String()
+	if len(scheduleText) == 0 {
+		scheduleText = fmt.Sprintf("No deliveries available for %s", subscription.Postcode)
+	}
+	b.send(domain.Message{
+		ChatID: subscription.ChatID,
+		Text:   scheduleText})
 }
 
 // send message to the telegram chat
@@ -72,13 +91,16 @@ func (b *Bot) send(msg domain.Message) {
 	b.messenger.Send(msg)
 }
 
-func (b *Bot) sendMessageHelp(chatID int64) {
+func (b *Bot) sendMessageHelp(chatID domain.ChatID) {
 	msg := `Help for the AH chatbot.
 	+ In order to register or update information, please enter your postcode in format 
 	/addme 1234AB
 
 	+ To remove your registration, enter
 	/unsubscribe
+
+	+ To check available deliveries for your postcode enter
+	/check
 
 	any other input will show this message
 	`
@@ -87,6 +109,24 @@ func (b *Bot) sendMessageHelp(chatID int64) {
 
 // DefaultMessageProcessor is a processor for messages to bot
 func (b *Bot) DefaultMessageProcessor(msg domain.Message) {
+	if strings.HasPrefix(msg.Text, "/check") {
+		b.checkDeliveryByID(msg.ChatID)
+		return
+	}
+
+	if strings.HasPrefix(msg.Text, "/unsubscribe") {
+		sub := domain.Subscription{
+			ChatID: msg.ChatID,
+		}
+		log.Printf("message processor remove subscription: %+v", sub)
+		b.storage.RemoveSubscription(sub)
+		b.messenger.Send(domain.Message{
+			ChatID: msg.ChatID,
+			Text:   fmt.Sprintf("Subscription was removed"),
+		})
+		return
+	}
+
 	match := b.reAddme.FindStringSubmatch(msg.Text)
 	if match != nil {
 		postcode := match[1]
@@ -99,19 +139,6 @@ func (b *Bot) DefaultMessageProcessor(msg domain.Message) {
 		b.messenger.Send(domain.Message{
 			ChatID: msg.ChatID,
 			Text:   fmt.Sprintf("Subscription for postcode %s was successful", postcode),
-		})
-		return
-	}
-
-	if b.reRemoveme.MatchString(msg.Text) {
-		sub := domain.Subscription{
-			ChatID: msg.ChatID,
-		}
-		log.Printf("message processor remove subscription: %+v", sub)
-		b.storage.RemoveSubscription(sub)
-		b.messenger.Send(domain.Message{
-			ChatID: msg.ChatID,
-			Text:   fmt.Sprintf("Subscription was removed"),
 		})
 		return
 	}

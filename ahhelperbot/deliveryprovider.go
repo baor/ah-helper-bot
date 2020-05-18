@@ -24,7 +24,8 @@ type DefaultDeliveryProvider struct{}
 func (p *DefaultDeliveryProvider) Get(postcode string) DeliverySchedule {
 	log.Printf("Request deliveries for postcode '%s'", postcode)
 	if len(postcode) == 0 {
-		log.Fatal("Postcode is empty!")
+		log.Print("Postcode is empty!")
+		return nil
 	}
 
 	c := http.Client{Timeout: 20 * time.Second}

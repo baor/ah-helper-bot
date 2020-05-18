@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 
 	"google.golang.org/api/iterator"
 
@@ -40,7 +39,7 @@ func NewFirestoreAdapter(projectID string) DataStorer {
 
 func (a *firestoreAdapter) AddSubscription(sub domain.Subscription) {
 	log.Printf("Add subscription %+v", sub)
-	_, err := a.client.Collection(subscriptionCollection).Doc(strconv.FormatInt(sub.ChatID, 10)).Set(a.context, sub)
+	_, err := a.client.Collection(subscriptionCollection).Doc(sub.ChatID.String()).Set(a.context, sub)
 	if err != nil {
 		log.Fatalf("Error %v on adding subscription: %v+", err, sub)
 	}
@@ -48,7 +47,7 @@ func (a *firestoreAdapter) AddSubscription(sub domain.Subscription) {
 
 func (a *firestoreAdapter) RemoveSubscription(sub domain.Subscription) {
 	log.Printf("Remove subscription %+v", sub)
-	_, err := a.client.Collection(subscriptionCollection).Doc(strconv.FormatInt(sub.ChatID, 10)).Delete(a.context)
+	_, err := a.client.Collection(subscriptionCollection).Doc(sub.ChatID.String()).Delete(a.context)
 	if err != nil {
 		log.Fatalf("Error %v on removing subscription: %v+", err, sub)
 	}
@@ -69,10 +68,22 @@ func (a *firestoreAdapter) GetSubscriptions() []domain.Subscription {
 
 		var sub domain.Subscription
 		if err := doc.DataTo(&sub); err != nil {
-			log.Fatalf("Error when reading data from storage: %v", err)
+			log.Fatalf("Error when convering data from storage: %v", err)
 			return subs
 		}
 		subs = append(subs, sub)
 	}
 	return subs
+}
+
+func (a *firestoreAdapter) GetSubscriptionByID(chatID domain.ChatID) domain.Subscription {
+	doc, err := a.client.Collection(subscriptionCollection).Doc(chatID.String()).Get(a.context)
+	if err != nil {
+		log.Fatalf("Failed to get subscription by %v", chatID)
+	}
+	var sub domain.Subscription
+	if err := doc.DataTo(&sub); err != nil {
+		log.Fatalf("Error when convering data from storage: %v", err)
+	}
+	return sub
 }
