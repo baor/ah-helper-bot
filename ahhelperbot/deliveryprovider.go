@@ -33,12 +33,11 @@ func (p *DefaultDeliveryProvider) Get(postcode string) DeliverySchedule {
 	dumpReq, _ := httputil.DumpRequest(req, false)
 	log.Printf("Request: %v\n", string(dumpReq))
 	resp, err := c.Do(req)
-	dump, _ := httputil.DumpResponse(resp, true)
-	log.Printf("Response: %v\n", string(dump))
-
 	if err != nil {
 		log.Fatal(err)
 	}
+	dump, _ := httputil.DumpResponse(resp, true)
+	log.Printf("Response: %v\n", string(dump))
 
 	defer resp.Body.Close()
 
